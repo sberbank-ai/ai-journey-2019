@@ -1,0 +1,4 @@
+{
+    "image": "alenush25/sberbank_baseline",
+    "entry_point": "python solution.py"
+}
