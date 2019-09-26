@@ -2,7 +2,13 @@ import json
 import os
 import numpy
 import pickle
+import pymorphy2
+import re
 
+def rus_tok(text, m = pymorphy2.MorphAnalyzer()):
+    reg = '([0-9]|\W|[a-zA-Z])'
+    toks = text.split()
+    return [m.parse(t)[0].normal_form for t in toks if not re.match(reg, t)]
 
 def load_tasks(dir_path, task_num=None):
     tasks, filenames = [], [os.path.join(dir_path, f) for f in os.listdir(dir_path)]

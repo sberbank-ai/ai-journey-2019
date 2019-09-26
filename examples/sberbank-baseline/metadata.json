@@ -1,4 +1,4 @@
 {
-    "image": "alenush25/sberbank_baseline",
+    "image": "sberbank/python-agi",
     "entry_point": "python solution.py"
 }

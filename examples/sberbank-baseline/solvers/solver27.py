@@ -1,10 +1,16 @@
-import re
+#!/usr/bin/env python
+# coding: utf-8
+
+
+
+import re, os
 import pickle
 import json
 import joblib
 import pymorphy2
 import numpy as np
 from summa import summarizer
+# Quick access to NLP functionality
 from fastai.text import *
 import pandas as pd
 from fastai.callbacks import ReduceLROnPlateauCallback
@@ -12,6 +18,8 @@ import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 
 def clear(text):
@@ -25,19 +33,26 @@ def clear(text):
     text = "\n".join(text)
     return text
 
+def check_end(text):
+    end = ".!?"
+    for l in end:
+        if l in text[-40:]:
+            return text[:-40] + re.split(r"\.|\!|\?",text[-40:])[0]+'.'
+    return False
 
 def post_prc(learn, text, temperature, n_words=300, max_words=400):
     text = clear(text)
-    while not text.endswith(tuple(".!?")) and n_words < max_words:
-        n_words += 1
-        text = clear(learn.predict(text, n_words=1, no_unk=True, temperature=temperature))
-
-    return clear(text.replace("xxbos", " "))
+    while not check_end(text) and n_words < max_words:
+        n_words += 20
+        text = clear(learn.predict(text, n_words=20, no_unk=True, temperature=temperature))
+    text = text.replace("xxbos", " ")
+    text = text[:-40] + re.split(r"\.|\!|\?",text[-40:])[0]+'.'
+    return clear(text)
 
 def rus_tok(text, m = pymorphy2.MorphAnalyzer()):
-        reg = '([0-9]|\W|[a-zA-Z])'
-        toks = text.split()
-        return [m.parse(t)[0].normal_form for t in toks if not re.match(reg, t)]
+    reg = '([0-9]|\W|[a-zA-Z])'
+    toks = text.split()
+    return [m.parse(t)[0].normal_form for t in toks if not re.match(reg, t)]
 
 class Solver(object):
     """
@@ -71,8 +86,8 @@ class Solver(object):
     Examples
     --------
     >>> # Basic usage
-    >>> from .generator import Solver
-    >>> g = Solver("path2config.json", "lm_5_ep_lr2-3_5_stlr", "itos",
+    >>> from .generator import SimpleGenerator
+    >>> g = SimpleGenerator("path2config.json", "lm_5_ep_lr2-3_5_stlr", "itos",
     >>>     "tfvect.joblib", "lda.joblib", "topics.csv", is_load=False)
     >>> g = g.fit(df_path="10000.csv", num_epochs=5)
     >>> # Generate for task (you should pass task description)
@@ -80,11 +95,11 @@ class Solver(object):
     >>> # Save Generator
     >>> g.save()
     >>> # Load Generator
-    >>> g = Solver("path2config.json")
+    >>> g = SimpleGenerator("path2config.json")
 
     """
     def __init__(
-        self, path2config, model_name_to_save=None, dict_name_to_save=None,
+        self, path2config='data/models/', model_name_to_save=None, dict_name_to_save=None,
         tf_vectorizer_path=None, lda_path=None, topics_path=None, is_load=True, seed=42):
         self.path2config = path2config
         self.model_name_to_save = model_name_to_save
@@ -110,11 +125,16 @@ class Solver(object):
         
     def eat_json(self, task):
         if 'text' in task:
-            text = re.split(r'\(*1\)', task['text'])[1]
-            return re.sub('\(*\d+\)*', ' ', text)
+            text = ' '.join(re.split(r'\(*1\)', task['text'])[1:])
+            return re.sub('\(*\d+\)*', '  ', text)
         else:
             return ''
-        
+    
+    def predict_from_model(self, task):
+        task = self.eat_json(task)
+        #print(task)
+        return self.generate(input_task=task)
+
     def predict(self, task):
         task = self.eat_json(task)
         #print(task)
@@ -138,14 +158,14 @@ class Solver(object):
 
         def second_paragraph(self, task_text):
             summary = summarizer.summarize(task_text, language=self.language, ratio=self.ratio, split=True)
-            try:
-                sentences = self.template_sentences(summary)
-                first_sent = 'Автор иллюстрирует данную проблему на примере предложений "{}" и "{}".'.format(sentences[0], sentences[1])
-                second_sent = 'На мой взгляд, читатель наблюдает авторскую позицию в предложении: "{}"'.format(sentences[2])
-                paragraph = " ".join([first_sent, second_sent])
-                return paragraph
-            except:
-                return ''
+            sentences = self.template_sentences(summary)
+            first_sent = 'Автор иллюстрирует данную проблему на примере предложений "{}" и "{}".'.format(sentences[0], sentences[1])
+            second_sent = 'На мой взгляд, читатель наблюдает авторскую позицию в предложении: "{}"'.format(sentences[2])
+            paragraph = " ".join([first_sent, second_sent])
+            return paragraph
+            #except:
+            #print('error',task_text )
+            #return ''
 
 
     def init_args(self, **kwargs):
@@ -172,12 +192,15 @@ class Solver(object):
         return dic
 
     def fit(self, df_path, model_name="lm_5_ep_lr2-3_5_stlr", dict_name="itos", num_epochs=5, is_fit_topics=False):
+        self.load()
+        return 
         df = pd.read_csv(df_path, sep="\t")
         bs = 16
         texts = pd.DataFrame(list(df.text))
+
         self.data = TextList.from_df(texts, 
                         processor=[TokenizeProcessor(tokenizer=Tokenizer(lang="xx")), 
-                                                     NumericalizeProcessor(vocab=Vocab.load("models/{}.pkl".format(dict_name)))]).\
+                        NumericalizeProcessor(vocab=Vocab.load("models/{}.pkl".format(dict_name)))]).\
                 random_split_by_pct(.1).\
                 label_for_lm().\
                 databunch(bs=bs)
@@ -194,24 +217,25 @@ class Solver(object):
             pass
         return self
 
-    def save(obj):
-        with open(obj.path2config, "w", encoding="utf-8") as file:
+    def save(self, path="data/models/solver27.pkl"):
+        with open(self.path2config, "w", encoding="utf-8") as file:
             json.dump({
-                "model_name_to_save": obj.model_name_to_save,
-                "dict_name_to_save": obj.dict_name_to_save,
-                "tf_vectorizer_path": obj.tf_vectorizer_path,
-                "lda_path": obj.lda_path,
-                "topics_path": obj.topics_path
+                "model_name_to_save": self.model_name_to_save,
+                "dict_name_to_save": self.dict_name_to_save,
+                "tf_vectorizer_path": self.tf_vectorizer_path,
+                "lda_path": self.lda_path,
+                "topics_path": self.topics_path
             }, file)
-        obj.learn.save(obj.model_name_to_save)
-        obj.learn.save_encoder(obj.model_name_to_save + "_enc")
+        self.learn.save(self.model_name_to_save)
+        self.learn.save_encoder(self.model_name_to_save + "_enc")
 
-    def load(self, path2config):
-        with open(path2config, "r", encoding="utf-8") as file:
+    def load(self, path="data/models/solver27.pkl"):
+        path2config = "data/models/"
+        with open(os.path.join(path2config,'path2config.json'), "r", encoding="utf-8") as file:
             config = json.load(file)
         bs = 16
+        config['n_hid'] = 1150
         self.init_args(**config)
-        # self = cls(path2config, is_load=False, **config)
         self.tf_vectorizer = joblib.load(self.tf_vectorizer_path)
         self.lda = joblib.load(self.lda_path)
         self.topics = pd.read_csv(self.topics_path, sep="\t")
@@ -220,21 +244,30 @@ class Solver(object):
         self.data = TextList.from_df(pd.DataFrame(["tmp", "tmp"]), 
                         processor=[TokenizeProcessor(tokenizer=Tokenizer(lang="xx")), 
                                                      NumericalizeProcessor(
-                                                         vocab=Vocab.load("data/generation/models/{}.pkl".format(self.dict_name_to_save)))]).\
+                                                         vocab=Vocab.load("models/itos.pkl".format(self.dict_name_to_save)))]).\
                 random_split_by_pct(.1).\
                 label_for_lm().\
                 databunch(bs=bs)
 
-        self.dict_name_to_save = os.path.join('data/generation/models',self.dict_name_to_save )
-        self.model_name_to_save = os.path.join('data/generation/models',self.model_name_to_save )
-        self.learn = language_model_learner(self.data, AWD_LSTM, pretrained=False, drop_mult=0.7,
+        #self.dict_name_to_save = os.path.join('data/models',self.dict_name_to_save )
+        #self.model_name_to_save = os.path.join('data/models',self.model_name_to_save )
+        conf = awd_lstm_lm_config.copy()
+        conf['n_hid'] = 1150
+        self.learn = language_model_learner(self.data, AWD_LSTM,pretrained=False,config=conf, drop_mult=0.7,
                                             pretrained_fnames=[self.model_name_to_save, self.dict_name_to_save])
+        #self.learn = language_model_learner(self.data, AWD_LSTM, pretrained=False, drop_mult=0.7,
+                                            #pretrained_fnames=[self.model_name_to_save, self.dict_name_to_save])
         return self
 
     def generate(self, input_task="", seed="", n_words=300, no_unk=True, temperature=0.9, max_words=400):
         if input_task != "":
             seed = self.getinfo(self.get_topic([input_task])[0])['Первая_фраза']
         essay = post_prc(self.learn, self.learn.predict(seed, n_words=n_words, no_unk=no_unk, temperature=temperature), temperature, n_words, max_words)
-        new_par = self.ranker.second_paragraph(input_task)
-        essay = essay.split('\n')
-        return '\n'.join([essay[0],new_par] +essay[1:])
+        try:
+            new_par = self.ranker.second_paragraph(input_task)
+            essay = essay.split('\n')
+            return '\n'.join([essay[0],new_par] +essay[1:])
+        except ValueError:
+            return essay
+
+
