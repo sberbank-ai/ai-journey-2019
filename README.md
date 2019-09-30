@@ -93,7 +93,7 @@
 
 ```json
 {
-    "image": "sberbank/python-agi",
+    "image": "sberbank/python",
     "entry_point": "python server.py"
 }
 ```
@@ -102,7 +102,7 @@
 
 Для запуска решений можно использовать существующие окружения:
 
-- `sberbank/python-agi` — Python3 с установленным большим набором библиотек ([подробнее](images/sberbank-python-agi))
+- `sberbank/python` — Python3 с установленным большим набором библиотек ([подробнее](images/sberbank-python))
 - `gcc` - для запуска компилируемых C/C++ решений (подробнее здесь)
 - `node` — для запуска JavaScript
 - `openjdk` — для Java
