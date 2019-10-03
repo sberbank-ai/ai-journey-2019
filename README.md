@@ -85,7 +85,7 @@
 
 Примеры архивов с решением:
 - [`aij2019-example-base-python.zip`](https://aij-2019.s3.eu-central-1.amazonaws.com/public/aij2019-example-base-python.zip) — пример оформления решения на Python, выдает ответы случайным образом
-- [`aij2019-sber_and_huawei-baseline-v2.zip`](https://aij-2019.s3.eu-central-1.amazonaws.com/public/aij2019-sber_and_huawei-baseline-v2.zip) — продвинутое решение от Сбербанка
+- [`aij2019-sber_and_huawei-baseline-v3.zip`](https://aij-2019.s3.eu-central-1.amazonaws.com/public/aij2019-sber_and_huawei-baseline-v3.zip) — продвинутое решение от Сбербанка
 
 ### Содержимое контейнера
 

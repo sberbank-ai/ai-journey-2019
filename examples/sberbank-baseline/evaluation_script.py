@@ -1,8 +1,8 @@
+import time
+import warnings
 import numpy as np
 from utils import *
 from solvers import *
-import time
-import warnings
 
 
 class Evaluation(object):
@@ -70,10 +70,8 @@ class Evaluation(object):
             duration = time.time() - start
             if duration > 60:
                 time_limit_is_observed = False
-                print(
-                    "Time limit is violated in solver {} which "
-                    "has been fitting for {}m {:2}s".format(
-                        solver_index, int(duration // 60), duration % 60))
+                print("Time limit is violated in solver {} which has been fitting for {}m {:2}s".format(
+                    solver_index, int(duration // 60), duration % 60))
             print("Solver {} is ready!\n".format(solver_index))
         return time_limit_is_observed
 
@@ -86,29 +84,38 @@ class Evaluation(object):
         print("Fitting Classifier...")
         self.classifier.fit(tasks)
         print("Classifier is ready!")
-        return self
 
+    # для всех заданий с 1 баллом
     def get_score(self, y_true, prediction):
-        if y_true == prediction:
-            return 1
+        if "correct" in y_true:
+            if y_true["correct"] == prediction:
+                return 1
+        elif "correct_variants" in y_true and isinstance(y_true["correct_variants"][0], str):
+            if  prediction in y_true["correct_variants"]:
+                return 1
+        elif "correct_variants" in y_true and isinstance(y_true["correct_variants"][0], list):
+            y_true = set(y_true["correct_variants"][0])
+            y_pred = set(prediction)
+            return int(len(set.intersection(y_true, y_pred)) == len(y_true) == len(y_pred))
         return 0
 
+    # для 8 и 26
     def get_matching_score(self, y_true, pred):
         score = 0
+        y_true = y_true["correct"]
         if len(y_true) != len(pred):
             return 0
-        for key in y_true.keys():
-            if y_true[key] == pred.get(key):
-                score += 1
-        return score
-
-    def get_multiple_score(self, y_true, pred):
-        score = 0
         for y in y_true:
-            for p in pred:
-                if y == p:
-                    score += 1
-        return score
+            if y_true[y] == pred[y]:
+                score += 1
+        return score 
+
+    # для 16 задания
+    def get_multiple_score(self, y_true, y_pred):
+        y_true = y_true["correct_variants"][0] if "correct_variants" in y_true else y_true["correct"]
+        while len(y_pred) < len(y_true):
+            y_pred.append(-1)
+        return max(0, len(set.intersection(set(y_true), set(y_pred))) - len(y_pred) + len(y_true))
 
     def variant_score(self, variant_scores):
         first_score = sum(variant_scores)
@@ -141,32 +148,22 @@ class Evaluation(object):
                 start = time.time()
                 task_index, task_type = i + 1, task["question"]["type"]
                 print("Predicting task {}...".format(task_index))
-                prediction = self.solvers[
-                    task_number[i] - 1].predict_from_model(task)
+                y_true = task["solution"]
+                prediction = self.solvers[task_number[i] - 1].predict_from_model(task)
                 if task_type == "matching":
-                    y_true = task['solution']['correct']
                     score = self.get_matching_score(y_true, prediction)
                 elif task_index == 16:
-                    y_true = task["solution"]["correct_variants"][
-                        0] if "correct_variants" in task["solution"] \
-                        else task["solution"]["correct"]
                     score = self.get_multiple_score(y_true, prediction)
                 else:
-                    y_true = task["solution"]["correct_variants"][
-                        0] if "correct_variants" in task["solution"] \
-                        else task["solution"]["correct"]
                     score = self.get_score(y_true, prediction)
-                print("Score: {}\nCorrect: {}\nPrediction: {}\n".format(score,
-                                                                        y_true,
-                                                                        prediction))
+                print("Score: {}\nCorrect: {}\nPrediction: {}\n".format(score, y_true, prediction))
                 predictions.append(score)
                 duration = time.time() - start
                 if duration > 60:
                     time_limit_is_observed = False
                     self.time_limit_is_ok = False
-                    print("Time limit is violated in solver {} "
-                          "which has been predicting for {}m {:2}s".format(
-                            i+1, int(duration // 60), duration % 60))
+                    print("Time limit is violated in solver {} which has been predicting for {}m {:2}s".format(
+                        i+1, int(duration // 60), duration % 60))
             self.test_scores.append(predictions)
         return time_limit_is_observed
 
@@ -178,7 +175,6 @@ def main():
     if not time_limit_is_observed:
         print('TIMEOUT: some solvers predict longer then 60s!')
     evaluation.get_overall_scores()
-
     mean_first_score = np.mean(evaluation.first_scores)
     mean_secondary_score = np.mean(evaluation.secondary_scores)
     print("Mean First Score: {}".format(mean_first_score))
