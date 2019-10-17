@@ -5,6 +5,16 @@ from utils import *
 from solvers import *
 
 
+def zero_if_exception(scorer):
+    def new_scorer(*args, **kwargs):
+        try:
+            return scorer(*args, **kwargs)
+        except:
+            return 0
+    return new_scorer  
+
+
+
 class Evaluation(object):
 
     def __init__(self, train_path="public_set/train",
@@ -86,6 +96,7 @@ class Evaluation(object):
         print("Classifier is ready!")
 
     # для всех заданий с 1 баллом
+    @zero_if_exception
     def get_score(self, y_true, prediction):
         if "correct" in y_true:
             if y_true["correct"] == prediction:
@@ -100,6 +111,7 @@ class Evaluation(object):
         return 0
 
     # для 8 и 26
+    @zero_if_exception
     def get_matching_score(self, y_true, pred):
         score = 0
         y_true = y_true["correct"]
@@ -111,6 +123,7 @@ class Evaluation(object):
         return score 
 
     # для 16 задания
+    @zero_if_exception
     def get_multiple_score(self, y_true, y_pred):
         y_true = y_true["correct_variants"][0] if "correct_variants" in y_true else y_true["correct"]
         while len(y_pred) < len(y_true):
@@ -188,3 +201,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
