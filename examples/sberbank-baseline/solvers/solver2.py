@@ -19,6 +19,7 @@ class Solver(BertEmbedder):
         self.init_seed()
         self.classifier = MLPClassifier(max_iter=300)
         self.label_encoder = LabelEncoder()
+        self.default_word = None
         self.fitted = False
 
     def init_seed(self):
@@ -26,13 +27,15 @@ class Solver(BertEmbedder):
         
     def save(self, path="data/models/solver2.pkl"):
         model = {"classifier": self.classifier,
-                 "label_encoder": self.label_encoder}
+                 "label_encoder": self.label_encoder,
+                 "default_word": self.default_word}
         joblib.dump(model, path)
 
     def load(self, path="data/models/solver2.pkl"):
         model = joblib.load(path)
         self.classifier = model["classifier"]
         self.label_encoder = model["label_encoder"]
+        self.default_word = model["default_word"]
         self.fitted = True
 
     @staticmethod
